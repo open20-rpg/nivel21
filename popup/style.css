@@ -90,13 +90,28 @@ body {
   height: 18px;
 }
 
-.kofi-button {
-  display: inline-block;
+.patreon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: #34343c;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: bold;
+  text-decoration: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
 }
 
-.kofi-img {
-  height: 40px;
-  cursor: pointer;
+.patreon-button:hover {
+  background-color: #45454f;
+}
+
+.patreon-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* Vistas */
