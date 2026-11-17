@@ -6,7 +6,7 @@
   const { BaseManager } = window._n21_?.managers || {};
 
   const N21_WARNING_TEXT =
-    "Para ver estos mensajes correctamente instala la extensión Nivel21 desde https://github.com/androettop/nivel21";
+    "Para ver estos mensajes correctamente instala la extensión Nivel21 desde https://open20.app/nivel21";
 
   /**
    * Escape special characters in JSON message values

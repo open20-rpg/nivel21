@@ -47,7 +47,7 @@ jobs:
           path: .
 
       - name: Attach zip to GitHub release
-        run: gh release upload "$RELEASE_TAG" n21ext.zip --repo androettop/nivel21 --clobber
+        run: gh release upload "$RELEASE_TAG" n21ext.zip --repo "${{ github.repository }}" --clobber
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
@@ -130,7 +130,7 @@ jobs:
       # Lets store-status.yml react to this message once each store publishes.
       - name: Attach Discord message to release
         if: always() && hashFiles('discord-message.json') != ''
-        run: gh release upload "$RELEASE_TAG" discord-message.json --repo androettop/nivel21 --clobber
+        run: gh release upload "$RELEASE_TAG" discord-message.json --repo "${{ github.repository }}" --clobber
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
@@ -138,7 +138,7 @@ jobs:
       - name: Enable store status checks
         if: always() && hashFiles('discord-message.json') != ''
         run: |
-          gh workflow enable store-status-firefox.yml --repo androettop/nivel21
-          gh workflow enable store-status-chrome.yml --repo androettop/nivel21
+          gh workflow enable store-status-firefox.yml --repo "${{ github.repository }}"
+          gh workflow enable store-status-chrome.yml --repo "${{ github.repository }}"
         env:
           GITHUB_TOKEN: ${{ github.token }}

@@ -27,7 +27,7 @@ Añade funcionalidades útiles para DMs y jugadores de D&D.
 
 ### Instalación manual (ultimos cambios)
 
-1. Descarga el archivo **n21ext.zip** de la [última version](https://github.com/androettop/nivel21/releases/latest), o [descárga los últimos cambios](https://github.com/androettop/nivel21/archive/refs/heads/master.zip) (puede ser inestable)
+1. Descarga el archivo **n21ext.zip** de la [última version](https://github.com/open20-rpg/nivel21/releases/latest), o [descárga los últimos cambios](https://github.com/open20-rpg/nivel21/archive/refs/heads/master.zip) (puede ser inestable)
 2. Abre tu navegador y ve a `chrome://extensions/` (Chrome) o `about:debugging#/runtime/this-firefox` (Firefox)
 3. Activa el "Modo de desarrollador" (Chrome)
 4. En chrome, haz clic en "Cargar extensión sin empaquetar" y selecciona la carpeta de la extensión, o en Firefox haz clic en "Cargar complemento temporal" y selecciona el archivo `manifest.json`
