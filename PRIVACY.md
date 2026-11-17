@@ -1,6 +1,6 @@
 ## Política de Privacidad — Nivel21
 
-**Última actualización:** 02/02/
+**Última actualización:** 02/02/2026
 
 ### 1) Introducción
 
