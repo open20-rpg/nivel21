@@ -132,6 +132,7 @@
       injectScript("src/features/tabbed-action-bar.js"),
       injectScript("src/features/money-editor.js"),
       injectScript("src/features/character-frame.js"),
+      injectScript("src/features/mana-bar.js"),
       injectScript("src/features/resource-actions.js"),
       injectScript("src/features/creature-resources.js"),
       injectScript("src/features/token-health-bar.js"),

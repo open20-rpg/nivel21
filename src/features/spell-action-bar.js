@@ -239,12 +239,20 @@
 
     /**
      * Spend a spell slot of the spell's level (or a pact slot of that level
-     * or higher). Does nothing if none is left or the user can't edit.
+     * or higher). Does nothing if none is left or the user can't edit. A
+     * character using mana spends the spell's points instead.
      */
     function spendSlot(charId, level) {
       const Tracking = window._n21_.managers.CombatTrackingManager;
       const entry = Tracking?.getEntry("character", charId);
       if (!entry?.editable || !(level > 0)) return;
+      const mana = Tracking.getMana(entry);
+      if (mana) {
+        if (Tracking.canCastWithMana(mana, level)) {
+          Tracking.setManaRemaining(entry, mana.remaining - Tracking.spellPointCost(level));
+        }
+        return;
+      }
       const available = (r) => r.used < r.max;
       const slot =
         entry.resources.find(
@@ -301,6 +309,15 @@
     /** Spell levels (1-9) the character can still cast with a free slot. */
     function availableLevels(entry) {
       const levels = new Set();
+      const Tracking = window._n21_.managers.CombatTrackingManager;
+      const mana = Tracking.getMana(entry);
+      if (mana) {
+        // Using mana: every level its points still cover.
+        for (let level = 1; level <= 9; level += 1) {
+          if (Tracking.canCastWithMana(mana, level)) levels.add(level);
+        }
+        return levels;
+      }
       entry.resources.forEach((r) => {
         if (r.used >= r.max) return;
         const level = Number(r.id);

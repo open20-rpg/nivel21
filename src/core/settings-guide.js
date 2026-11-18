@@ -240,6 +240,11 @@
       image: IMG("character-frame.png"),
       description: "Muestra arriba a la izquierda el personaje seleccionado: retrato, CA, vida, recursos y estados.",
     },
+    "mana-bar": {
+      group: "combat",
+      image: IMG("mana-bar.png"),
+      description: "Regla opcional de puntos de conjuro: los espacios de conjuro se llevan como una barra de maná en el marco de personaje y en los tokens.",
+    },
     "effects-panel": {
       group: "combat",
       image: IMG("effects-panel.png"),
@@ -395,6 +400,11 @@
       "Haz click en la vida para curar, dañar o dar puntos temporales.",
       "Recursos: click para gastar y click derecho para recuperar. Estados: «+» para agregar y click derecho para quitar.",
       "El retrato abre su hoja de personaje.",
+    ],
+    "mana-bar": [
+      "En «Recursos de…» del personaje (registro de la campaña o tablero), pulsa «Usar maná en lugar de espacios de conjuro».",
+      "Haz click en la barra azul del marco de personaje para gastar o recuperar maná: Nivel21 marca los espacios de conjuro que correspondan.",
+      "Para volver a los espacios de conjuro, usa el mismo botón en «Recursos de…».",
     ],
     "tabbed-action-bar": [
       "Actívala en «Mi estilo» o en Configuración › Funciones.",

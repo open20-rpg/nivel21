@@ -452,6 +452,17 @@
       const Tracking = window._n21_.managers.CombatTrackingManager;
       const entry = Tracking?.getEntry?.("character", charId);
       if (!entry) return null;
+      // Using mana: how many spells of this level its points still pay for.
+      const mana = Tracking.getMana?.(entry);
+      if (mana) {
+        const cost = Tracking.spellPointCost(level);
+        if (!cost || !mana.slots.some((slot) => Number(slot.id) >= level)) return null;
+        return {
+          left: Math.floor(mana.remaining / cost),
+          total: Math.floor(mana.max / cost),
+          mana: { cost, remaining: mana.remaining },
+        };
+      }
       let left = 0;
       let total = 0;
       entry.resources.forEach((r) => {
@@ -593,7 +604,11 @@
       const slots = current ? slotInfo(current.charId, level) : null;
       const title =
         `<h5>${escapeHtml(option.name)}</h5>` +
-        (slots ? `<p>Espacios de nivel ${level}: ${slots.left}/${slots.total}</p>` : "");
+        (slots?.mana
+          ? `<p>Cuesta ${slots.mana.cost} de maná (quedan ${slots.mana.remaining})</p>`
+          : slots
+            ? `<p>Espacios de nivel ${level}: ${slots.left}/${slots.total}</p>`
+            : "");
       // Just the level icon: the slots left are in the tooltip, and a level
       // without any is greyed out.
       const $tile = makeTile({

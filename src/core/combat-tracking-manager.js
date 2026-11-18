@@ -12,6 +12,11 @@
 
   // Edits are applied optimistically and sent once the user stops clicking.
   const SAVE_DEBOUNCE_MS = 600;
+  // Spell points (optional rule of the 5e DMG): what each spell slot level
+  // is worth. A character whose resources include MANA_RESOURCE_NAME uses
+  // its spell slots as mana (see getMana).
+  const SPELL_POINT_COST = { 1: 2, 2: 3, 3: 5, 4: 6, 5: 7, 6: 9, 7: 10, 8: 11, 9: 13 };
+  const MANA_RESOURCE_NAME = "Maná";
 
   /**
    * Normalize free text for comparisons: lowercase, no accents/diacritics,
@@ -697,6 +702,119 @@
       if (!$row.length || $row.hasClass("selected")) return false;
       $row.trigger("click");
       return true;
+    }
+
+    /** Name of the resource that turns a character's spell slots into mana. */
+    get manaResourceName() {
+      return MANA_RESOURCE_NAME;
+    }
+
+    /**
+     * The entry's mana, or null if it doesn't use it. Characters use mana
+     * when they have a resource named "Maná" (created from the resources
+     * modal): their spell slots then hold it, each unused slot worth its
+     * spell points (2, 3, 5…, which add up to the rule's table), and that
+     * one-box resource marks one more point spent so any amount fits.
+     * @returns {{max: number, remaining: number, marker: Object, slots: Array}|null}
+     */
+    getMana(entry) {
+      // Off with the "Barra de maná" feature: the slots are just slots.
+      if (window._n21_?.managers?.SettingsManager?.get?.("feature.mana-bar.enabled") === false) {
+        return null;
+      }
+      const marker = (entry?.resources || []).find((r) => this.isManaMarker(r));
+      if (!marker) return null;
+      const slots = entry.resources.filter((r) => r.category === "spell_slots" && SPELL_POINT_COST[r.id]);
+      if (!slots.length) return null;
+      let max = 0;
+      let remaining = 0;
+      slots.forEach((slot) => {
+        max += slot.max * SPELL_POINT_COST[slot.id];
+        remaining += (slot.max - slot.used) * SPELL_POINT_COST[slot.id];
+      });
+      remaining = Math.max(remaining - Math.min(marker.used, 1), 0);
+      return { max, remaining, marker, slots };
+    }
+
+    /** Spell points a spell of `level` costs (0 for cantrips / unknown). */
+    spellPointCost(level) {
+      return SPELL_POINT_COST[toInt(level, 0)] || 0;
+    }
+
+    /**
+     * Whether a character using mana can cast a spell of `level`: enough
+     * mana for it, and a slot of that level or higher (the rule's highest
+     * castable level is the highest slot the character has).
+     */
+    canCastWithMana(mana, level) {
+      const cost = this.spellPointCost(level);
+      if (!mana || !cost) return false;
+      return mana.remaining >= cost && mana.slots.some((slot) => toInt(slot.id, 0) >= toInt(level, 0));
+    }
+
+    /** Whether a resource is the "Maná" marker (see getMana). */
+    isManaMarker(resource) {
+      return (
+        resource?.category === "other" &&
+        normalizeText(resource.label || resource.id) === normalizeText(MANA_RESOURCE_NAME)
+      );
+    }
+
+    /**
+     * Whether a resource is shown as the mana bar instead of on its own:
+     * the marker and, for a character using mana, its spell slots.
+     */
+    isPartOfMana(entry, resource) {
+      if (!this.getMana(entry)) return false;
+      return this.isManaMarker(resource) || resource?.category === "spell_slots";
+    }
+
+    /**
+     * Leave the entry with `value` mana: marks the spell slots (and the
+     * marker) that add up to it, changing as few of them as possible from
+     * what's marked now. Saved like any other resource change.
+     * @returns {boolean} True if queued
+     */
+    setManaRemaining(entry, value) {
+      const mana = this.getMana(entry);
+      if (!mana) return false;
+      const target = Math.max(0, Math.min(toInt(value, 0), mana.max));
+
+      // Unused points reachable with each choice of used slots per level,
+      // keeping for each sum the choice that changes the fewest boxes.
+      let best = new Map([[0, { changes: 0, used: [] }]]);
+      mana.slots.forEach((slot) => {
+        const cost = SPELL_POINT_COST[slot.id];
+        const next = new Map();
+        best.forEach((state, sum) => {
+          for (let used = 0; used <= slot.max; used += 1) {
+            const total = sum + (slot.max - used) * cost;
+            const changes = state.changes + Math.abs(used - slot.used);
+            const known = next.get(total);
+            if (!known || changes < known.changes) {
+              next.set(total, { changes, used: [...state.used, used] });
+            }
+          }
+        });
+        best = next;
+      });
+
+      let choice = null;
+      [0, 1].forEach((markerUsed) => {
+        const state = best.get(target + markerUsed);
+        if (!state) return;
+        const changes = state.changes + Math.abs(markerUsed - Math.min(mana.marker.used, 1));
+        if (!choice || changes < choice.changes) choice = { changes, used: state.used, markerUsed };
+      });
+      if (!choice) return false;
+
+      const spellSlots = {};
+      mana.slots.forEach((slot, i) => {
+        spellSlots[slot.id] = choice.used[i];
+      });
+      return this.queueStatus(entry, {
+        used: { spell_slots: spellSlots, other: { [mana.marker.id]: choice.markerUsed } },
+      });
     }
 
     /**

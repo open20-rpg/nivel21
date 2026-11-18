@@ -7,6 +7,10 @@
        cada token asignado a un personaje/criatura ([char:id]). Cada usuario solo ve los PV de los
        personajes/criaturas que puede ver en su propio panel de personajes (el
        DM los ve todos). No se envía nada a Nivel20: es solo una capa visual.
+
+       Con la función "Barra de maná", los personajes que usan maná muestran
+       también su maná ("actual/máximo") en azul, justo debajo de la vida
+       (por fuera del token).
     ======================= */
 
     const { loadManagers } = window._n21_;
@@ -24,8 +28,9 @@
     );
 
 
-    // networkId -> entry snapshot ({ currentHp, maxHp, tempHp })
+    // networkId -> entry snapshot ({ currentHp, maxHp, tempHp, mana })
     let bars = new Map();
+    let manaEnabled = SettingsManager.get("feature.mana-bar.enabled");
     let rebuildTimer = null;
 
     function rebuild() {
@@ -39,10 +44,12 @@
         // getEntry only returns rows visible in this client's panel.
         const entry = CombatTrackingManager.getEntry(ref.type, ref.id, ref.index);
         if (!entry || !(entry.maxHp > 0)) return;
+        const mana = manaEnabled ? CombatTrackingManager.getMana(entry) : null;
         next.set(networkId, {
           currentHp: entry.currentHp,
           maxHp: entry.maxHp,
           tempHp: entry.tempHp,
+          mana: mana ? { remaining: mana.remaining, max: mana.max } : null,
         });
       });
       bars = next;
@@ -84,68 +91,77 @@
           return;
         }
 
-        const main = String(hp.currentHp);
-        const temp = hp.tempHp > 0 ? `+${hp.tempHp}` : "";
-        const rest = `/${hp.maxHp}`;
+        // Hit points where they always are; mana right under them, hanging
+        // below the token.
+        const pills = [
+          {
+            parts: [
+              [String(hp.currentHp), hp.currentHp <= 0 ? DOWN_COLOR : TEXT_COLOR],
+              hp.tempHp > 0 ? [`+${hp.tempHp}`, TEMP_COLOR] : null,
+              [`/${hp.maxHp}`, TEXT_COLOR],
+            ].filter(Boolean),
+            ratio: hp.currentHp / hp.maxHp,
+            fill: "rgba(150, 24, 20, 0.7)",
+          },
+        ];
+        if (hp.mana) {
+          pills.push({
+            parts: [[`${hp.mana.remaining}/${hp.mana.max}`, TEXT_COLOR]],
+            ratio: hp.mana.remaining / hp.mana.max,
+            fill: "rgba(36, 89, 184, 0.8)",
+          });
+        }
+
         // Never wider than the token: shrink padding first, then the text.
+        // Both pills use the size the widest one fits in.
         const maxWidth = rect.width * 0.9;
         let fontSize = Math.round(Math.min(Math.max(rect.width * 0.15, 9), 14));
-        let wMain;
-        let wTemp;
-        let wRest;
-        let textWidth;
-        const measure = () => {
-          ctx.font = `700 ${fontSize}px sans-serif`;
-          wMain = ctx.measureText(main).width;
-          wTemp = temp ? ctx.measureText(temp).width : 0;
-          wRest = ctx.measureText(rest).width;
-          textWidth = wMain + wTemp + wRest;
-        };
-        measure();
+        const widthOf = (pill) => pill.parts.reduce((sum, [text]) => sum + ctx.measureText(text).width, 0);
+        ctx.font = `700 ${fontSize}px sans-serif`;
+        let textWidth = Math.max(...pills.map(widthOf));
         const minPad = fontSize * 0.3;
         if (textWidth + minPad * 2 > maxWidth) {
           fontSize = Math.max(6, Math.floor(fontSize * (maxWidth - minPad * 2) / textWidth));
-          measure();
+          ctx.font = `700 ${fontSize}px sans-serif`;
+          textWidth = Math.max(...pills.map(widthOf));
         }
         ctx.textBaseline = "middle";
 
-        const padX = Math.max(
-          Math.min(fontSize * 0.9, (maxWidth - textWidth) / 2),
-          fontSize * 0.3,
-        );
-        const boxW = textWidth + padX * 2;
         const boxH = fontSize * 1.25;
-        const x = rect.x + (rect.width - boxW) / 2;
-        const y = rect.y + rect.height - boxH - rect.height * 0.04;
-
+        const gap = Math.max(1, fontSize * 0.15);
+        const hpY = rect.y + rect.height - boxH - rect.height * 0.04;
         ctx.globalAlpha = visibility.translucent ? 0.5 : 1;
-        roundedRect(ctx, x, y, boxW, boxH, boxH / 2);
-        ctx.fillStyle = "rgba(15, 16, 18, 0.72)";
-        ctx.fill();
 
-        // Dark red fill that empties as hit points go down.
-        const ratio = Math.max(0, Math.min(hp.currentHp / hp.maxHp, 1));
-        if (ratio > 0) {
-          ctx.save();
+        pills.forEach((pill, i) => {
+          const width = widthOf(pill);
+          const padX = Math.max(Math.min(fontSize * 0.9, (maxWidth - width) / 2), fontSize * 0.3);
+          const boxW = width + padX * 2;
+          const x = rect.x + (rect.width - boxW) / 2;
+          const y = hpY + i * (boxH + gap);
+
           roundedRect(ctx, x, y, boxW, boxH, boxH / 2);
-          ctx.clip();
-          ctx.fillStyle = "rgba(150, 24, 20, 0.7)";
-          ctx.fillRect(x, y, boxW * ratio, boxH);
-          ctx.restore();
-        }
+          ctx.fillStyle = "rgba(15, 16, 18, 0.72)";
+          ctx.fill();
 
-        let cursor = x + padX;
-        const middle = y + boxH / 2 + 0.5;
-        ctx.fillStyle = hp.currentHp <= 0 ? DOWN_COLOR : TEXT_COLOR;
-        ctx.fillText(main, cursor, middle);
-        cursor += wMain;
-        if (temp) {
-          ctx.fillStyle = TEMP_COLOR;
-          ctx.fillText(temp, cursor, middle);
-          cursor += wTemp;
-        }
-        ctx.fillStyle = TEXT_COLOR;
-        ctx.fillText(rest, cursor, middle);
+          // Coloured fill that empties as the value goes down.
+          const ratio = Math.max(0, Math.min(pill.ratio, 1));
+          if (ratio > 0) {
+            ctx.save();
+            roundedRect(ctx, x, y, boxW, boxH, boxH / 2);
+            ctx.clip();
+            ctx.fillStyle = pill.fill;
+            ctx.fillRect(x, y, boxW * ratio, boxH);
+            ctx.restore();
+          }
+
+          let cursor = x + padX;
+          const middle = y + boxH / 2 + 0.5;
+          pill.parts.forEach(([text, color]) => {
+            ctx.fillStyle = color;
+            ctx.fillText(text, cursor, middle);
+            cursor += ctx.measureText(text).width;
+          });
+        });
       });
     }
 
@@ -156,6 +172,11 @@
     rebuild();
 
     // Applies live: the layer is added/removed with the setting.
+    SettingsManager.watch("feature.mana-bar.enabled", (value) => {
+      manaEnabled = !!value;
+      rebuild();
+    });
+
     SettingsManager.watch("feature.token-health-bar.enabled", (enabled) => {
       if (enabled) {
         rebuild();

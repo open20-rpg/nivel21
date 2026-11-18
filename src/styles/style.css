@@ -1992,6 +1992,48 @@ body.darkmode--activated .n21-cframe {
 	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
+/* Mana (spell points held in the spell slots): a thinner blue bar under the
+   hit points, same behaviour. */
+.n21-cframe-mana {
+	position: relative;
+	height: 14px;
+	width: 100%;
+	margin-top: 3px;
+	padding: 0;
+	border: 1px solid var(--n21-cf-border);
+	border-radius: 5px;
+	background: var(--n21-cf-hp-track);
+	overflow: hidden;
+	cursor: pointer;
+	color: #fff;
+	outline: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.n21-cframe-mana:disabled {
+	cursor: default;
+}
+
+.n21-cframe-mana:not(:disabled):hover,
+.n21-cframe-mana:focus-visible {
+	border-color: var(--n21-cf-text);
+}
+
+.n21-cframe-mana-fill {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	background: #2459b8;
+	transition: width 250ms ease;
+}
+
+.n21-cframe-mana .n21-cframe-hp-text {
+	font-size: 11px;
+}
+
 /* All resources in a single row; scrolls sideways if the screen is narrow. */
 .n21-cframe-resources {
 	grid-column: 1 / -1;
@@ -2207,8 +2249,20 @@ body.darkmode--activated .n21-cframe {
 .n21-cframe-btn--heal,
 .n21-cframe-btn--damage,
 .n21-cframe-btn--primary,
-.n21-cframe-btn--temp {
+.n21-cframe-btn--temp,
+.n21-cframe-btn--mana-spend,
+.n21-cframe-btn--mana-restore {
 	color: #fff;
+}
+
+.n21-cframe-btn--mana-spend {
+	background: #1c3f80;
+	border-color: #2a5bb5;
+}
+
+.n21-cframe-btn--mana-restore {
+	background: #1f5130;
+	border-color: #2f7a48;
 }
 
 .n21-cframe-btn--heal {
@@ -2710,7 +2764,8 @@ body.darkmode--activated .n21-cframe {
 .n21-chat-consent {
 	position: fixed;
 	inset: 0;
-	z-index: 13000;
+	/* Above Nivel20's own modals (z-index 20000), which can open it. */
+	z-index: 20050;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -4821,4 +4876,19 @@ button.n21-onboarding-card:disabled {
 
 .n21-onboarding-dismiss input {
 	accent-color: #822020;
+}
+
+/* Mana bar: "use mana instead of spell slots" block in Nivel20's resources
+   modal. */
+.n21-mana-toggle {
+	margin: 4px 0 12px;
+	padding: 10px 12px;
+	border: 1px solid rgba(36, 89, 184, 0.45);
+	border-radius: 6px;
+	background: rgba(36, 89, 184, 0.08);
+}
+
+.n21-mana-toggle p {
+	margin: 0 0 8px;
+	font-size: 13px;
 }
