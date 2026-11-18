@@ -13,6 +13,10 @@
          daño, ofrece tirar la salvación de Constitución.
        - Recursos (espacios de conjuro, "otros recursos" y los recursos
          locales de criaturas): click gasta uno, click derecho recupera uno.
+       - Maná (función "Barra de maná"): si el personaje tiene el recurso
+         "Maná", sus espacios de conjuro se muestran como una barra azul de
+         puntos de conjuro bajo la vida; click abre un desplegable con un
+         número y Gastar / Recuperar.
 
        Todos los cambios usan la misma llamada que el modal nativo de vida.
     ======================= */
@@ -41,6 +45,7 @@
 
     // Applies live: the frame is hidden while the feature is disabled.
     let enabled = SettingsManager.get("feature.character-frame.enabled");
+    let manaEnabled = SettingsManager.get("feature.mana-bar.enabled");
 
     if (!window._n21_.utils.isTabletopUrl()) return;
 
@@ -240,6 +245,22 @@
       return fallback || entry.imageUrl;
     }
 
+    /** The entry's mana while the "Barra de maná" feature is on, or null. */
+    function getMana(entry) {
+      return manaEnabled ? CombatTrackingManager.getMana(entry) : null;
+    }
+
+    function buildManaHtml(entry, mana) {
+      const ratio = mana.max > 0 ? Math.min(mana.remaining / mana.max, 1) : 0;
+      return `
+            <button type="button" class="n21-cframe-mana ${mana.remaining <= 0 ? "n21-cframe-mana--empty" : ""}" ${
+              entry.editable ? 'title="Modificar maná"' : "disabled"
+            } aria-label="Maná: ${mana.remaining} de ${mana.max}" aria-expanded="false">
+              <span class="n21-cframe-mana-fill" style="width:${ratio * 100}%"></span>
+              <span class="n21-cframe-hp-text">${mana.remaining}/${mana.max}</span>
+            </button>`;
+    }
+
     function buildCardHtml(entry) {
       const hpRatio = entry.maxHp > 0 ? Math.min(entry.currentHp / entry.maxHp, 1) : 0;
       const tempRatio = entry.maxHp > 0 ? Math.min(entry.tempHp / entry.maxHp, 1) : 0;
@@ -252,8 +273,13 @@
         ? `<img src="${escapeHtml(imageUrl)}" alt="" />`
         : `<span class="n21-cframe-portrait-empty">${escapeHtml(entry.name.charAt(0))}</span>`;
 
+      // With a mana bar, its spell slots and marker leave the resource icons.
+      const mana = getMana(entry);
+      const shownResources = mana
+        ? entry.resources.filter((r) => !CombatTrackingManager.isPartOfMana(entry, r))
+        : entry.resources;
       const resources = [
-        ...entry.resources.map((r) => buildResourceHtml(r, "native", entry.editable)),
+        ...shownResources.map((r) => buildResourceHtml(r, "native", entry.editable)),
         ...getLocalResources(entry).map((r) => buildResourceHtml(r, "local")),
         // Characters' resources live in Nivel20: its "Recursos de" modal.
         entry.type === "character" && entry.editable
@@ -283,7 +309,7 @@
               <span class="n21-cframe-hp-fill" style="width:${hpRatio * 100}%"></span>
               <span class="n21-cframe-hp-temp" style="width:${tempRatio * 100}%"></span>
               <span class="n21-cframe-hp-text">${hpText}</span>
-            </button>
+            </button>${mana ? buildManaHtml(entry, mana) : ""}
           </div>
           ${resources ? `<div class="n21-cframe-resources">${resources}</div>` : ""}
         </div>`;
@@ -319,6 +345,7 @@
         entry.ac,
         entry.editable,
         entry.resources,
+        manaEnabled,
         entry.conditions.map((c) => c.name),
         getLocalResources(entry),
       ]);
@@ -336,6 +363,45 @@
         el.dataset.side = "bottom";
       });
       TooltipManager.processAll(root);
+    }
+
+    /* ----------------------- mana dropdown ----------------------- */
+
+    function openManaDropdown() {
+      if (!current?.editable || !getMana(current)) return;
+      const dropdown = getDropdown();
+      if (!dropdown) return;
+      dropdownOpen = true;
+      dropdown.hidden = false;
+      dropdown.dataset.mode = "mana";
+      dropdown.innerHTML = `
+        <div class="n21-cframe-hp-form">
+          <input type="number" min="0" step="1" inputmode="numeric" class="n21-cframe-hp-input" aria-label="Cantidad" placeholder="0" />
+          <button type="button" class="n21-cframe-btn n21-cframe-btn--mana-spend" data-mana-action="spend">Gastar</button>
+          <button type="button" class="n21-cframe-btn n21-cframe-btn--mana-restore" data-mana-action="restore">Recuperar</button>
+        </div>
+        <div class="n21-cframe-hp-msg" hidden></div>`;
+      dropdown.querySelector("input").focus();
+      document.querySelector(`#${ROOT_ID} .n21-cframe-mana`)?.setAttribute("aria-expanded", "true");
+    }
+
+    function applyManaAction(action) {
+      const mana = current ? getMana(current) : null;
+      if (!mana) return;
+      const input = getDropdown()?.querySelector("input");
+      const value = parseInt(input?.value, 10);
+      if (!Number.isFinite(value) || value < 0) {
+        input?.focus();
+        return;
+      }
+      if (action === "spend" && value > mana.remaining) {
+        showMessage(`<p>No alcanza: quedan ${mana.remaining} de maná.</p>`);
+        input.focus();
+        return;
+      }
+      const next = mana.remaining + (action === "spend" ? -value : value);
+      CombatTrackingManager.setManaRemaining(current, next);
+      closeDropdown();
     }
 
     /* ----------------------- HP dropdown ----------------------- */
@@ -427,6 +493,7 @@
         dropdown.innerHTML = "";
       }
       document.querySelector(`#${ROOT_ID} .n21-cframe-hp`)?.setAttribute("aria-expanded", "false");
+      document.querySelector(`#${ROOT_ID} .n21-cframe-mana`)?.setAttribute("aria-expanded", "false");
     }
 
     function showMessage(html) {
@@ -521,6 +588,18 @@
         if (target.closest(".n21-cframe-hp")) {
           if (dropdownOpen && getDropdown()?.dataset.mode === "hp") closeDropdown();
           else openDropdown();
+          return;
+        }
+
+        if (target.closest(".n21-cframe-mana")) {
+          if (dropdownOpen && getDropdown()?.dataset.mode === "mana") closeDropdown();
+          else openManaDropdown();
+          return;
+        }
+
+        const manaButton = target.closest("[data-mana-action]");
+        if (manaButton) {
+          applyManaAction(manaButton.getAttribute("data-mana-action"));
           return;
         }
 
@@ -644,6 +723,11 @@
 
     SettingsManager.watch("feature.character-frame.enabled", (value) => {
       enabled = !!value;
+      lastRenderKey = "";
+      render();
+    });
+    SettingsManager.watch("feature.mana-bar.enabled", (value) => {
+      manaEnabled = !!value;
       lastRenderKey = "";
       render();
     });

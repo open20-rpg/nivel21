@@ -247,6 +247,15 @@
       });
 
       this.registerSetting({
+        name: "feature.mana-bar.enabled",
+        label: "Barra de maná",
+        type: "boolean",
+        defaultValue: true,
+        live: true,
+        category: "features",
+      });
+
+      this.registerSetting({
         name: "feature.creature-resources.enabled",
         label: "Recursos de criaturas",
         type: "boolean",

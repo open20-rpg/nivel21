@@ -42,7 +42,8 @@
 
   const REQUIRED_WARNING = "Si no se envía, el cambio no se aplica.";
 
-  function showDialog(key, { title, description, required, warning }) {
+  function showDialog(key, { title, description, required, warning, confirmLabel, cancelLabel }) {
+    // key null: a plain confirmation (no "remember" option, see confirmAction).
     // Actions that only exist to send the message don't need the warning.
     const warningText = warning !== undefined ? warning : required ? REQUIRED_WARNING : "";
     return new Promise((resolve) => {
@@ -55,18 +56,22 @@
           <h5 id="${DIALOG_ID}-title">${escapeHtml(title || "¿Enviar al chat?")}</h5>
           ${description ? `<p>${escapeHtml(description)}</p>` : ""}
           ${warningText ? `<p class="n21-chat-consent-warning">${escapeHtml(warningText)}</p>` : ""}
-          <label class="n21-chat-consent-remember">
+          ${
+            key
+              ? `<label class="n21-chat-consent-remember">
             <input type="checkbox" /> No volver a preguntar
-          </label>
+          </label>`
+              : ""
+          }
           <div class="n21-chat-consent-actions">
-            <button type="button" class="n21-chat-consent-no">No enviar</button>
-            <button type="button" class="n21-chat-consent-yes">Enviar</button>
+            <button type="button" class="n21-chat-consent-no">${escapeHtml(cancelLabel || "No enviar")}</button>
+            <button type="button" class="n21-chat-consent-yes">${escapeHtml(confirmLabel || "Enviar")}</button>
           </div>
         </div>`;
       document.body.appendChild(overlay);
 
       const finish = (send) => {
-        const remember = overlay.querySelector("input[type=checkbox]").checked;
+        const remember = !!overlay.querySelector("input[type=checkbox]")?.checked;
         overlay.remove();
         document.removeEventListener("keydown", onKey, true);
         if (remember) {
@@ -114,5 +119,20 @@
     return result;
   }
 
+  /**
+   * Same dialog for any other confirmation (no "remember" option).
+   * @param {{title: string, description?: string, warning?: string,
+   *   confirmLabel?: string, cancelLabel?: string}} options
+   * @returns {Promise<boolean>} Whether it was confirmed
+   */
+  function confirmAction(options = {}) {
+    const result = queue.then(() =>
+      showDialog(null, { confirmLabel: "Aceptar", cancelLabel: "Cancelar", warning: "", ...options }),
+    );
+    queue = result.catch(() => {});
+    return result;
+  }
+
   window._n21_.chatConsent = { confirm };
+  window._n21_.confirmAction = confirmAction;
 })();

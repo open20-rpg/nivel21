@@ -111,6 +111,7 @@
         "src/features/tabbed-action-bar.js",
         "src/features/money-editor.js",
         "src/features/character-frame.js",
+        "src/features/mana-bar.js",
         "src/features/resource-actions.js",
         "src/features/creature-resources.js",
         "src/features/token-health-bar.js",
