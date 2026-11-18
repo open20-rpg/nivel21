@@ -70,6 +70,7 @@
       if (!url.endsWith(".json")) url = `${url}.json`;
 
       if (!this._cache) this._cache = new Map();
+      if (!this._gameSystems) this._gameSystems = new Map();
       const cached = this._cache.get(url);
       if (cached) return cached;
 
@@ -85,6 +86,10 @@
           });
           const text = response.ok ? await response.text() : "";
           if (response.ok && response.status !== 202 && text) {
+            // The slug-less URL redirects to /games/{system}/..., which is the
+            // only place the game system shows up (the JSON doesn't carry it).
+            const game = /\/games\/([^/]+)\//.exec(new URL(response.url, location.href).pathname);
+            if (game) this._gameSystems.set(url, game[1]);
             const data = JSON.parse(text);
             return data?.printable_hash || data;
           }
@@ -104,6 +109,23 @@
         if (this._cache.get(url) === request) this._cache.delete(url);
       });
       return request;
+    }
+
+    /**
+     * Nivel20 game-system slug of a character (e.g. "dnd-2024", "pathfinder2",
+     * "universal"), taken from where its sheet URL redirects. Shares the
+     * `fetchCharacter` cache, so it costs no extra request.
+     *
+     * @param {string} [urlOrPath] - Defaults to the current character page.
+     * @returns {Promise<string|null>}
+     */
+    async getGameSystem(urlOrPath) {
+      const url = this._normalizeUrl(urlOrPath);
+      if (!url) return null;
+      const game = /^\/games\/([^/]+)\//.exec(new URL(url, location.href).pathname);
+      if (game) return game[1];
+      await this.fetchCharacter(url);
+      return this._gameSystems?.get(url) || null;
     }
 
     /**

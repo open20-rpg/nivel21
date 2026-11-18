@@ -258,7 +258,7 @@
     "actions-bar": {
       group: "character",
       image: IMG("actions-bar.png"),
-      description: "Agrega una carpeta con las acciones comunes de combate: Carrera, Destrabarse, Esquivar…",
+      description: "Agrega una carpeta con las acciones comunes de combate del sistema del personaje (en Universal no se agrega).",
     },
     "traits-action-bar": {
       group: "character",
