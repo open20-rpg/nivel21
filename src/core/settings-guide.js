@@ -386,7 +386,7 @@
   const tutorials = {
     "turn-order": [
       "DM: haz click derecho en uno o varios tokens y elige «Agregar turno». Si el token está asignado a un personaje, su iniciativa se completa sola.",
-      "Con el botón del dado se leen las iniciativas tiradas en el chat y se tiran las de las criaturas; «Ordenar» los acomoda.",
+      "Las iniciativas se toman del registro de combate y de las tiradas de «Iniciativa» (sin animación de dados); si alguien vuelve a tirar, la lista se reordena sola. El botón del dado tira las de las criaturas que no tengan.",
       "«Actualizar» empieza el combate. Las flechas pasan de turno y el contador de asaltos avanza solo.",
       "Todos ven el panel en «Orden de turnos», en el menú de la izquierda. Pasa el mouse por una fila para resaltar ese token en el mapa.",
     ],

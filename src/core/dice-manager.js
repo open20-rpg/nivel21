@@ -56,6 +56,37 @@
       this._modifiers = [];
       // When non-null, overrides the visibility argument of every dice roll.
       this._visibilityOverride = null;
+      // name -> predicate(notation, options): rolls it matches skip the dice
+      // animation (see _isInstant).
+      this._instantRules = new Map();
+    }
+
+    /**
+     * Make the rolls a predicate matches instant: Nivel20 only simulates them
+     * (its "none" dice target) and sends the result to the chat right away,
+     * instead of throwing 3D dice on the board or the web. The user's own dice
+     * setting is left untouched for every other roll.
+     * @param {string} name - Unique rule name (re-adding replaces it)
+     * @param {Function} predicate - (notation, options) => boolean, where
+     *   options is the roll's data object (roll_name, sender_info…)
+     * @returns {Function} Unsubscribe
+     */
+    addInstantRule(name, predicate) {
+      if (typeof predicate !== "function") return () => {};
+      this._instantRules.set(name, predicate);
+      return () => this._instantRules.delete(name);
+    }
+
+    /** @private */
+    _isInstant(notation, options) {
+      for (const [name, predicate] of this._instantRules) {
+        try {
+          if (predicate(notation, options || {})) return true;
+        } catch (error) {
+          console.warn(`[DiceManager] Error in instant rule "${name}":`, error);
+        }
+      }
+      return false;
     }
 
     /**
@@ -141,7 +172,20 @@
           }
         }
 
-        return originalFn(modifiedNotation, ...modifiedArgs.map(stripLocalUrls));
+        const finalArgs = modifiedArgs.map(stripLocalUrls);
+        if (!self._isInstant(modifiedNotation, finalArgs[0])) {
+          return originalFn(modifiedNotation, ...finalArgs);
+        }
+        // Nivel20 picks where to throw the dice from getDiceRollsTarget()
+        // synchronously inside diceRoll: answer "none" (simulate, no
+        // animation) just for this call.
+        const getTarget = window.getDiceRollsTarget;
+        window.getDiceRollsTarget = () => "none";
+        try {
+          return originalFn(modifiedNotation, ...finalArgs);
+        } finally {
+          window.getDiceRollsTarget = getTarget;
+        }
       };
 
       this._hooked = true;

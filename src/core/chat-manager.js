@@ -112,6 +112,22 @@
     };
   }
 
+  /** Normalize a live `dice_roll` payload (see ChatManager.onDiceRoll). */
+  function parseDiceRoll(data) {
+    // The total is only in the rendered message ("… = <span class='result-
+    // dice-total'>19</span>"); the raw results lack the notation's modifiers.
+    const match = /result-dice-total[^>]*>\s*(-?\d+)/.exec(String(data.message || ""));
+    const total = match ? parseInt(match[1], 10) : null;
+    return {
+      rollName: String(data.data?.roll_name || ""),
+      total: Number.isFinite(total) ? total : null,
+      senderType: data.sender_type || null,
+      senderId: data.sender_id != null ? String(data.sender_id) : null,
+      senderName: data.sender_name || "",
+      userId: data.user_id ?? null,
+    };
+  }
+
   /**
    * ChatManager provides a unified interface for sending and receiving chat messages
    * Features can subscribe to incoming messages and use a consistent API to send messages
@@ -121,6 +137,7 @@
       super();
       this._hooked = false;
       this._listeners = [];
+      this._rollListeners = [];
       this.sendDebounced = createDebouncedChatSender();
     }
 
@@ -181,6 +198,17 @@
             }
           }
 
+          if (data.message_type === "dice_roll" && data.data) {
+            const roll = parseDiceRoll(data);
+            for (const listener of self._rollListeners) {
+              try {
+                listener(roll, data);
+              } catch (error) {
+                console.warn("[ChatManager] Roll listener error:", error);
+              }
+            }
+          }
+
           originalReceived(data);
         };
 
@@ -207,6 +235,23 @@
         if (index > -1) {
           this._listeners.splice(index, 1);
         }
+      };
+    }
+
+    /**
+     * Subscribe to dice rolls arriving live in the chat (not the history
+     * shown on load). Callback receives ({ rollName, total, senderType,
+     * senderId, senderName, userId }, rawData); senderType is "Character",
+     * "Creature"… when the roll was made as one, total is null if unknown.
+     * @returns Unsubscribe function
+     */
+    onDiceRoll(callback) {
+      if (typeof callback !== "function") return () => {};
+      this._rollListeners.push(callback);
+      this._hookSubscriptions();
+      return () => {
+        const index = this._rollListeners.indexOf(callback);
+        if (index > -1) this._rollListeners.splice(index, 1);
       };
     }
 
