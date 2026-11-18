@@ -700,6 +700,56 @@
     }
 
     /**
+     * Initiative stored for a row in the panel (what "Iniciativa" > "Aplicar"
+     * or a status refresh leaves there), or null if it has none.
+     * @returns {number|null}
+     */
+    getInitiative(type, id) {
+      const $row = this._getRow(type, String(id));
+      let value = $row.length ? $row.data("initiative") : undefined;
+      if (value === undefined && $row.length) {
+        value = $row.find(".char-initiative-value").first().text();
+      }
+      if (value === undefined || value === null || value === "") {
+        const group = type === "creature" ? this._statusData?.creatures : this._statusData?.characters;
+        value = group?.[id]?.initiative;
+      }
+      const number = parseInt(value, 10);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    /**
+     * Store a row's initiative the way Nivel20's initiative dialog does
+     * ("Aplicar" posts every row to set_characters_status); only this row is
+     * sent, the rest keep their value. The panel re-sorts itself with the
+     * status that comes back.
+     * @returns {Promise<boolean>}
+     */
+    async setInitiative(type, id, value) {
+      const baseUrl = this.getBaseUrl();
+      const initiative = parseInt(value, 10);
+      if (!baseUrl || !Number.isFinite(initiative)) return false;
+      const group = type === "creature" ? "creatures" : "characters";
+      try {
+        const data = await window._n21_.utils.queueRequest(() =>
+          $.ajax({
+            url: `${baseUrl}/set_characters_status`,
+            type: "post",
+            dataType: "json",
+            data: { [group]: { [id]: { initiative } } },
+          }),
+        );
+        if (data && typeof window.refreshCampaignStatus === "function") {
+          window.refreshCampaignStatus(data);
+        }
+        return true;
+      } catch (error) {
+        console.warn("[CombatTrackingManager] Could not save initiative for", type, id, error);
+        return false;
+      }
+    }
+
+    /**
      * The initiative roll Nivel20 offers in a row ("Inic." in the combat
      * tracking panel), so other places can make exactly the same roll.
      * @returns {{notation: string, name: string}|null} null if not in the panel

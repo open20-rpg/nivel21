@@ -13,7 +13,6 @@
       PlayerManager,
       TokenManager,
       FloatingPanelManager,
-      CharacterManager,
       CameraManager,
       MainMenuUIManager,
       SettingsManager,
@@ -26,7 +25,6 @@
       "PlayerManager",
       "TokenManager",
       "FloatingPanelManager",
-      "CharacterManager",
       "CameraManager",
       "MainMenuUIManager",
       "SettingsManager",
@@ -150,10 +148,18 @@
      * afterwards; this is only the initial value.
      */
     function getInitiativeForToken(networkId) {
-      const charId = TokenManager.getLinkedRowId(networkId);
-      if (!charId) return 0;
-      return CharacterManager.getCharacterInitiative(charId);
+      const rowId = TokenManager.getLinkedRowId(networkId);
+      const row = rowId ? CombatTrackingManager.resolveRow(rowId) : null;
+      if (!row) return 0;
+      return CombatTrackingManager.getInitiative(row.type, row.id) ?? 0;
     }
+
+    // "Iniciativa" rolls (action bar, the panel's "Inic.", the creatures this
+    // feature rolls): no dice animation, the result goes to the chat at once.
+    const INITIATIVE_ROLL_NAME = /^\s*iniciativa\b/i;
+    DiceManager.addInstantRule("turn-order-initiative", (_notation, options) =>
+      INITIATIVE_ROLL_NAME.test(toText(options?.roll_name)),
+    );
 
     /**
      * Whether a token is assigned to the current user (tag [user:userName]).
@@ -441,7 +447,7 @@
               <i class="ft-bar-chart-2"></i> Ordenar
             </button>
             <button type="button" class="n21-turn-btn n21-turn-read-init"
-              title="Usar la última tirada de «Iniciativa» del chat de cada personaje y tirar la de las criaturas">
+              title="Usar la iniciativa del registro de combate (o la última tirada de «Iniciativa» del chat) y tirar la de las criaturas que no tengan">
               <i class="fa fa-cube"></i>
             </button>
             <button type="button" class="n21-turn-btn n21-turn-btn--danger n21-turn-end" title="Finalizar combate">
@@ -933,6 +939,7 @@
           if (roster.some((e) => e.networkId === id)) return;
 
           const entry = { networkId: id, initiative: getInitiativeForToken(id) };
+          rememberInitiative(entry);
 
           // Insert keeping the list sorted by initiative (descending), so a
           // token with an initial initiative lands in the right spot. Ties keep
@@ -1000,20 +1007,32 @@
         });
       }
 
+      /**
+       * Fill every initiative: the value in the combat tracking panel (what
+       * its "Iniciativa" dialog or a roll stored there), else the character's
+       * latest "Iniciativa" roll in the chat; creatures without one get rolled
+       * (once per row: Nivel20 keeps one initiative per creature group).
+       */
       async function readInitiatives() {
         if (readingInitiatives || !roster.length) return;
         readingInitiatives = true;
         try {
-          // Characters: their latest "Iniciativa" roll in the chat.
           const latest = new Map();
           ChatUIManager.getRolls(INITIATIVE_ROLL).forEach((roll) => {
             latest.set(normalizeName(roll.senderName), roll.total);
           });
-          const creatures = [];
+          const toRoll = new Map(); // "creature:id" -> { row, entries }
           roster.forEach((entry) => {
             const row = rosterRow(entry);
+            const stored = row ? CombatTrackingManager.getInitiative(row.type, row.id) : null;
+            if (stored !== null) {
+              entry.initiative = stored;
+              return;
+            }
             if (row?.type === "creature") {
-              creatures.push({ entry, row });
+              const key = rowKey(row);
+              if (!toRoll.has(key)) toRoll.set(key, { row, entries: [] });
+              toRoll.get(key).entries.push(entry);
               return;
             }
             const names = [
@@ -1026,8 +1045,9 @@
           dirty = true;
           renderDm();
 
-          // Creatures: rolled one at a time, so each result maps to its token.
-          for (const { entry, row } of creatures) {
+          // Rolled one at a time, so each result maps to its row. Instant
+          // rolls (see the instant rule above), so this takes no time.
+          for (const { row, entries } of toRoll.values()) {
             // Same roll as "Inic." in the combat tracking panel.
             const initiative = CombatTrackingManager.getInitiativeRoll(row.type, row.id);
             if (!initiative) continue;
@@ -1040,7 +1060,9 @@
             if (!rolled) break;
             const roll = await waitForNewRoll(countBefore);
             if (!roll) break;
-            entry.initiative = roll.total;
+            entries.forEach((entry) => {
+              entry.initiative = roll.total;
+            });
             dirty = true;
             renderDm();
           }
@@ -1049,6 +1071,113 @@
           readingInitiatives = false;
         }
       }
+
+      /* ---------- live initiative: panel values and new rolls ---------- */
+
+      function rowKey(row) {
+        return `${row.type}:${row.id}`;
+      }
+
+      // Panel initiative last seen per row ("type:id" -> number|null), so a
+      // refresh only touches the turn order when that value really changed
+      // (and never overrides a manual edit otherwise).
+      const seenInitiatives = new Map();
+
+      function rememberInitiative(entry) {
+        const row = rosterRow(entry);
+        if (!row || seenInitiatives.has(rowKey(row))) return;
+        seenInitiatives.set(rowKey(row), CombatTrackingManager.getInitiative(row.type, row.id));
+      }
+
+      /**
+       * Re-sort after initiatives changed by themselves (a new roll, the
+       * panel's "Iniciativa" dialog), keeping the turn on whoever has it. In a
+       * running combat the new order goes out right away; otherwise it waits
+       * for "Actualizar" like any other edit.
+       */
+      async function applyInitiativeChanges() {
+        const actor = currentTurn >= 1 ? roster[currentTurn - 1]?.networkId : null;
+        roster.sort((a, b) => b.initiative - a.initiative);
+        const previousTurn = currentTurn;
+        if (actor) currentTurn = roster.findIndex((e) => e.networkId === actor) + 1;
+
+        if (!timer.running || dirty) {
+          dirty = true;
+          renderDm();
+          return;
+        }
+        renderDm();
+        const sent = await withChatConsent(() => {
+          queueChat("roster", buildRosterCommand());
+          // Players keep the turn as a position: follow the actor if it moved.
+          if (currentTurn !== previousTurn) {
+            queueChat("turn", `/turno ${currentTurn} asalto:${round}`);
+            startTurnTimer();
+          }
+        });
+        if (!sent) setDirty(true);
+      }
+
+      /** Set the initiative of every roster token of a row. */
+      function setRowInitiative(row, value) {
+        let changed = false;
+        roster.forEach((entry) => {
+          const entryRow = rosterRow(entry);
+          if (!entryRow || rowKey(entryRow) !== rowKey(row)) return;
+          if (entry.initiative === value) return;
+          entry.initiative = value;
+          changed = true;
+        });
+        return changed;
+      }
+
+      // The panel's initiatives changed (its "Iniciativa" dialog, a roll
+      // stored there, another client): bring them into the turn order.
+      CombatTrackingManager.onChange(() => {
+        if (!roster.length) return;
+        let changed = false;
+        const done = new Set();
+        roster.forEach((entry) => {
+          const row = rosterRow(entry);
+          if (!row || done.has(rowKey(row))) return;
+          done.add(rowKey(row));
+          const value = CombatTrackingManager.getInitiative(row.type, row.id);
+          if (!seenInitiatives.has(rowKey(row))) {
+            seenInitiatives.set(rowKey(row), value);
+            return;
+          }
+          if (value === seenInitiatives.get(rowKey(row))) return;
+          seenInitiatives.set(rowKey(row), value);
+          if (value !== null && setRowInitiative(row, value)) changed = true;
+        });
+        if (changed) applyInitiativeChanges();
+      });
+
+      // A new "Iniciativa" roll in the chat: its latest value wins. Rolled as
+      // a character/creature of the panel, it's stored there (like Nivel20's
+      // own dialog), which brings it here and keeps both in sync; otherwise
+      // it's matched to roster tokens by name.
+      ChatManager.onDiceRoll((roll) => {
+        if (!INITIATIVE_ROLL_NAME.test(roll.rollName) || roll.total === null) return;
+        const type = { Character: "character", Creature: "creature" }[roll.senderType];
+        const row = type && roll.senderId ? { type, id: roll.senderId } : null;
+        if (row && CombatTrackingManager.getInitiativeRoll(row.type, row.id)) {
+          if (CombatTrackingManager.getInitiative(row.type, row.id) !== roll.total) {
+            CombatTrackingManager.setInitiative(row.type, row.id, roll.total);
+          }
+          return;
+        }
+        const name = normalizeName(roll.senderName);
+        let changed = false;
+        roster.forEach((entry) => {
+          if (rosterRow(entry)) return;
+          if (normalizeName(getTokenInfo(entry.networkId).name) !== name) return;
+          if (entry.initiative === roll.total) return;
+          entry.initiative = roll.total;
+          changed = true;
+        });
+        if (changed) applyInitiativeChanges();
+      });
 
       function sortByInitiative() {
         roster.sort((a, b) => b.initiative - a.initiative);
@@ -1255,6 +1384,7 @@
         if (!rebuilt.length) return;
 
         roster = rebuilt;
+        roster.forEach(rememberInitiative);
         currentTurn = clampTurn(
           state.currentTurn >= 1 ? state.currentTurn : 1,
           roster.length,
