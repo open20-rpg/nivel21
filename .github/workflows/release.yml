@@ -78,7 +78,7 @@ jobs:
           tag: ${{ needs.release.outputs.tag }}
           title: Nivel21
           download: https://open20.app/nivel21
-          status: "⏳ En camino a las tiendas: Chrome y Firefox suman su ✅ cuando la publican, lo que puede tardar unos días. Mientras tanto se puede instalar a mano desde la release."
+          status: "⏳ En camino a las tiendas: Chrome y Firefox suman su ✅ cuando la publican, lo que puede tardar unas horas. Mientras tanto se puede instalar a mano desde la release."
           banner-background: .github/discord-banner.jpg
           banner-icon: icons/icon128.png
           bot-token: ${{ secrets.DISCORD_BOT_TOKEN }}
