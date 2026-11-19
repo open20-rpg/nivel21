@@ -1,14 +1,11 @@
 name: Store status
 
 # The stores publish a version only after their review, which can take days.
-# This waits for each store to serve the version (scripts/store_status.mjs),
-# reacts to its Discord announcement with the store's emoji and, once both
-# published it, drops the announcement's "on its way" line.
-#
-# GitHub drops most scheduled runs, so instead of a cron each run checks every
-# 10 minutes for up to ~5.5 hours (a job lasts 6 at most) and, when a store
-# publishes or time runs out, starts the next run itself. It gives up 14 days
-# after the release. release.yml starts it; it can also be run by hand.
+# When one does, an external watcher starts this run (GitHub drops most
+# scheduled runs, so it isn't a cron here): it reacts to the version's Discord
+# announcement with the emoji of each store already serving it and, once both
+# are, drops the announcement's "on its way" line. It takes a few seconds and
+# can also be run by hand.
 
 on:
   workflow_dispatch:
@@ -17,28 +14,13 @@ on:
         description: "Release tag (e.g. v1.2.3)"
         required: true
         type: string
-      published:
-        description: "Stores already reacted to (internal: passed between runs)"
-        required: false
-        default: ""
-        type: string
 
 permissions:
   contents: read
-  actions: write
-
-concurrency:
-  group: store-status-${{ inputs.tag }}
-  cancel-in-progress: false
 
 jobs:
-  wait:
+  react:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
-    env:
-      TAG: ${{ inputs.tag }}
-      GH_TOKEN: ${{ github.token }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -46,59 +28,31 @@ jobs:
         with:
           node-version: 24
 
-      # Ends as soon as a store not reacted to yet publishes, so its reaction
-      # doesn't wait for the other one.
-      - name: Wait for the stores
-        id: wait
-        env:
-          PUBLISHED: ${{ inputs.published }}
+      - name: Check the stores
+        id: stores
         run: |
-          deadline=$((SECONDS + 330 * 60))
-          while :; do
-            status=$(node scripts/store_status.mjs "$TAG")
-            chrome=$(jq -r .chrome <<< "$status")
-            firefox=$(jq -r .firefox <<< "$status")
-            new=false
-            [[ $chrome == true && " $PUBLISHED " != *" chrome "* ]] && new=true
-            [[ $firefox == true && " $PUBLISHED " != *" firefox "* ]] && new=true
-            if [[ $new == true || $SECONDS -ge $deadline ]]; then break; fi
-            sleep 600
-          done
-          echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
-          echo "firefox=$firefox" >> "$GITHUB_OUTPUT"
+          status=$(node scripts/store_status.mjs "$TAG")
+          echo "chrome=$(jq -r .chrome <<< "$status")" >> "$GITHUB_OUTPUT"
+          echo "firefox=$(jq -r .firefox <<< "$status")" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ inputs.tag }}
 
       - uses: open20-rpg/open20-release/discord-react@v1
-        if: steps.wait.outputs.chrome == 'true'
+        if: steps.stores.outputs.chrome == 'true'
         with:
           tag: ${{ inputs.tag }}
           emoji: chrome_ready
           bot-token: ${{ secrets.DISCORD_BOT_TOKEN }}
 
       - uses: open20-rpg/open20-release/discord-react@v1
-        if: steps.wait.outputs.firefox == 'true'
+        if: steps.stores.outputs.firefox == 'true'
         with:
           tag: ${{ inputs.tag }}
           emoji: firefox_ready
           bot-token: ${{ secrets.DISCORD_BOT_TOKEN }}
 
       - uses: open20-rpg/open20-release/discord-finish@v1
-        if: steps.wait.outputs.chrome == 'true' && steps.wait.outputs.firefox == 'true'
+        if: steps.stores.outputs.chrome == 'true' && steps.stores.outputs.firefox == 'true'
         with:
           tag: ${{ inputs.tag }}
           bot-token: ${{ secrets.DISCORD_BOT_TOKEN }}
-
-      - name: Keep waiting in a new run
-        if: steps.wait.outputs.chrome != 'true' || steps.wait.outputs.firefox != 'true'
-        env:
-          CHROME: ${{ steps.wait.outputs.chrome }}
-          FIREFOX: ${{ steps.wait.outputs.firefox }}
-        run: |
-          created=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json createdAt --jq .createdAt)
-          if (( $(date +%s) - $(date -d "$created" +%s) > 14 * 24 * 3600 )); then
-            echo "::warning::$TAG is still not in every store after 14 days: giving up"
-            exit 0
-          fi
-          published=""
-          [[ $CHROME == true ]] && published="chrome"
-          [[ $FIREFOX == true ]] && published="$published firefox"
-          gh workflow run store-status.yml --repo "$GITHUB_REPOSITORY" -f tag="$TAG" -f published="${published# }"

@@ -55,10 +55,11 @@ reglas y notas que el resto de Open20), en cada push a `main`, con
    tiendas.
 3. Arma el zip, lo adjunta a la release (el anuncio suma `github_ready`) y lo
    sube a las dos tiendas.
-4. `store-status.yml` espera a que cada tienda la publique
-   (`scripts/store_status.mjs`), reacciona con su emoji y, cuando están las
-   dos, quita del anuncio la línea de "en camino".
+4. Cuando cada tienda la publica (puede tardar días), un vigilante externo
+   lanza `store-status.yml` con el tag (también se puede lanzar a mano), que
+   reacciona con el emoji de la tienda (`scripts/store_status.mjs`) y, cuando
+   están las dos, quita del anuncio la línea de "en camino".
 
 **No cambies la versión a mano, no crees tags ni releases a mano.** Para
-repetir los pasos 3 y 4 de una versión existente (por ejemplo, si falló una
+repetir el paso 3 de una versión existente (por ejemplo, si falló una
 tienda), se ejecuta el workflow `Release` a mano con su tag.

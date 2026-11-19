@@ -12,10 +12,11 @@ name: Release
 #   3. The zip is built from that tag and attached to the release (the
 #      announcement gets github_ready) and uploaded to the Chrome Web Store and
 #      Firefox Add-ons.
-#   4. store-status.yml waits for each store to publish it, reacts with its
-#      emoji and, once both did, drops the "on its way" line.
+#   4. When each store publishes it (it can take days), an external watcher
+#      starts store-status.yml, which reacts with the store's emoji and, once
+#      both did, drops the "on its way" line.
 #
-# To redo steps 3 and 4 for an existing release (e.g. after a failed store
+# To redo step 3 for an existing release (e.g. after a failed store
 # upload), run this workflow by hand with its tag.
 #
 # Discord uses the organization's DISCORD_BOT_TOKEN secret; without it nothing
@@ -33,7 +34,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
   issues: write
   pull-requests: write
 
@@ -155,16 +155,3 @@ jobs:
           compatibility-android: true
           compatibility-android-min: "120.0"
           release-note: "Release ${{ env.RELEASE_TAG }}"
-
-  # Waits for the stores even if an upload failed: re-running this workflow
-  # by hand uploads again, and the store check picks it up.
-  store-status:
-    runs-on: ubuntu-latest
-    needs: [release, release-chrome-extension, release-firefox-addon]
-    if: ${{ !cancelled() && (needs.release.outputs.tag != '' || inputs.release_tag != '') }}
-    steps:
-      - name: Start the store checks
-        run: gh workflow run store-status.yml --repo "${{ github.repository }}" -f tag="$RELEASE_TAG"
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag || needs.release.outputs.tag }}
