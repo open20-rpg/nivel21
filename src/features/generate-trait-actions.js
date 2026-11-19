@@ -108,17 +108,37 @@
     );
   }
 
-  /** Build a feat (race / origin / other) detail URL for the floating panel. */
-  function featFloatingUrl(gameSystem, id) {
-    return `https://nivel20.com/games/${gameSystem}/feats/${id}?floating=true`;
+  /**
+   * Nivel20's slug for a name (Rails' parameterize): no tags or accents,
+   * lowercase, anything else between words becomes a single "-".
+   */
+  function slugify(name) {
+    return String(name ?? "")
+      .replace(/<[^>]*>/g, " ")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
   }
 
-  /** Build a class-trait detail URL for the floating panel. */
-  function professionTraitFloatingUrl(gameSystem, professionId, id) {
-    return (
-      `https://nivel20.com/games/${gameSystem}/professions/${professionId}` +
-      `/profession_traits/${id}?floating=true`
-    );
+  /**
+   * Feat (origin / other) detail URL for the floating panel. Nivel20 finds
+   * feats only by their slug, which the sheet doesn't carry but is made from
+   * the name (repeated names get "-2"… and aren't found).
+   */
+  function featFloatingUrl(gameSystem, name) {
+    const slug = slugify(name);
+    return slug ? `https://nivel20.com/games/${gameSystem}/feats/${slug}?floating=true` : null;
+  }
+
+  /**
+   * Class / subclass trait detail URL for the floating panel. The flat route
+   * is the one Nivel20 serves (the one nested under the profession answers
+   * "Elemento no encontrado", and subclass traits never belonged to it).
+   */
+  function professionTraitFloatingUrl(gameSystem, id) {
+    return `https://nivel20.com/games/${gameSystem}/profession_traits/${id}?floating=true`;
   }
 
   /**
@@ -195,7 +215,7 @@
    * @param {Object} ph - The character's printable_hash.
    * @param {Object} [options]
    * @param {string} [options.gameSystem="dnd-2024"] - The Nivel20 game-system
-   *   slug, used to build the feat detail URLs opened in the floating panel.
+   *   slug, used to build the trait detail URLs opened in the floating panel.
    * @param {(markdown: string) => string} [options.renderDescription] - Renders
    *   the trait's Markdown description to HTML (trait data is Markdown, but
    *   action descriptions display as HTML). Defaults to a line-break-only
@@ -228,8 +248,7 @@
       );
     };
 
-    // Class traits: one icon per profession (class); their detail page lives
-    // under that profession's profession_traits.
+    // Class traits: one icon per profession (class).
     const professions = Array.isArray(ph?.professions) ? ph.professions : [];
     for (const profession of professions) {
       const classIcon = profession?.portrait_url || characterIcon;
@@ -238,10 +257,7 @@
       const refLevel = profession?.level;
       const feats = Array.isArray(profession?.feats) ? profession.feats : [];
       for (const feat of feats) {
-        const url =
-          hasId(feat) && hasId(profession)
-            ? professionTraitFloatingUrl(gameSystem, profession.id, feat.id)
-            : null;
+        const url = hasId(feat) ? professionTraitFloatingUrl(gameSystem, feat.id) : null;
         pushFeat(feat, classIcon, { url, refLevel, typeName });
       }
     }
@@ -259,7 +275,7 @@
     for (const source of otherSources) {
       if (!Array.isArray(source)) continue;
       for (const feat of source) {
-        const url = hasId(feat) ? featFloatingUrl(gameSystem, feat.id) : null;
+        const url = hasId(feat) ? featFloatingUrl(gameSystem, feat.name) : null;
         pushFeat(feat, characterIcon, {
           url,
           refLevel: charLevel,
@@ -317,8 +333,10 @@
           "MarkdownEditorManager",
         );
         const ph = await sheet.fetchCharacter(opts.url);
+        const gameSystem =
+          opts.gameSystem || (await sheet.getGameSystem(opts.url).catch(() => null)) || resolveGameSystem();
         const actions = buildTraitActions(ph, {
-          gameSystem: opts.gameSystem || resolveGameSystem(),
+          gameSystem,
           renderDescription: (md) => markdown.render(md),
         });
         const json = JSON.stringify(actions, null, 2);

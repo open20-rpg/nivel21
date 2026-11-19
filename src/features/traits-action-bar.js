@@ -71,17 +71,30 @@
       }
     }
 
+    /**
+     * The trait generator (generate-trait-actions), loaded alongside this
+     * feature: wait for it a little instead of failing if it isn't ready yet.
+     */
+    async function getTraitActions() {
+      for (let i = 0; i < 50; i += 1) {
+        const api = window._n21_?.traitActions;
+        if (typeof api?.buildTraitActions === "function") return api;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      throw new Error("traitActions.buildTraitActions not available");
+    }
+
     /** Fetch + generate the traits folder for a character. Never rejects. */
     function fetchTraitFolders(charId) {
       return (async () => {
-        const buildTraitActions = window._n21_?.traitActions?.buildTraitActions;
-        if (typeof buildTraitActions !== "function") {
-          throw new Error("traitActions.buildTraitActions not available");
-        }
-        const ph = await CharacterSheetManager.fetchCharacter(
-          `/characters/${charId}.json`,
-        );
-        const gameSystem = window._n21_?.traitActions?.resolveGameSystem?.();
+        const { buildTraitActions, resolveGameSystem } = await getTraitActions();
+        const sheetUrl = `/characters/${charId}.json`;
+        const ph = await CharacterSheetManager.fetchCharacter(sheetUrl);
+        // The character's own system (the page may be the tabletop, or
+        // another game's), so its traits' detail pages are found.
+        const gameSystem =
+          (await CharacterSheetManager.getGameSystem(sheetUrl).catch(() => null)) ||
+          resolveGameSystem();
         const renderDescription = (md) => MarkdownEditorManager.render(md);
         return assignIds(
           buildTraitActions(ph, { gameSystem, renderDescription }),
