@@ -69,13 +69,23 @@
       }
     }
 
+    /**
+     * The spell generator (generate-spell-actions), loaded alongside this
+     * feature: wait for it a little instead of failing if it isn't ready yet.
+     */
+    async function getBuildSpellActions() {
+      for (let i = 0; i < 50; i += 1) {
+        const build = window._n21_?.spellActions?.buildSpellActions;
+        if (typeof build === "function") return build;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      throw new Error("spellActions.buildSpellActions not available");
+    }
+
     /** Fetch + generate the spell folders for a character. Never rejects. */
     function fetchSpellFolders(charId) {
       return (async () => {
-        const buildSpellActions = window._n21_?.spellActions?.buildSpellActions;
-        if (typeof buildSpellActions !== "function") {
-          throw new Error("spellActions.buildSpellActions not available");
-        }
+        const buildSpellActions = await getBuildSpellActions();
         // Slug-less URL: nivel20 redirects /characters/{id}.json to the right
         // game/campaign, so this works in every context (tabletop, sheet,
         // any game system) without depending on the current URL or AppContext.
