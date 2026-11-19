@@ -1,25 +1,89 @@
-name: Release chrome extension
+name: Release
+
+# Releases are automated on every push to `main` with the shared Open20 release
+# actions (https://github.com/open20-rpg/open20-release):
+#   1. `release` reads the Conventional Commits since the last tag and, if any
+#      is visible to users, publishes a version: it writes it into manifest.json
+#      and the popup (scripts/bump_version.mjs), commits them as
+#      `chore(release): vX.Y.Z [skip ci]`, tags `vX.Y.Z` and creates the GitHub
+#      Release with the notes. Pushes with nothing releasable stop there.
+#   2. `announce` posts the version on Discord, saying it's on its way to the
+#      stores.
+#   3. The zip is built from that tag and attached to the release (the
+#      announcement gets github_ready) and uploaded to the Chrome Web Store and
+#      Firefox Add-ons.
+#   4. store-status.yml waits for each store to publish it, reacts with its
+#      emoji and, once both did, drops the "on its way" line.
+#
+# To redo steps 3 and 4 for an existing release (e.g. after a failed store
+# upload), run this workflow by hand with its tag.
+#
+# Discord uses the organization's DISCORD_BOT_TOKEN secret; without it nothing
+# is announced and the release goes on.
 
 on:
-  release:
-    types: [released]
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag to publish (e.g. v1.2.3)"
+        description: "Publish an existing release instead of releasing (tag, e.g. v1.2.3)"
         required: true
         type: string
 
 permissions:
   contents: write
   actions: write
+  issues: write
+  pull-requests: write
 
-env:
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.release.tag_name }}
+# Never run two releases at once (they'd race for the same version).
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  build:
+  release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: open20-rpg/open20-release/release@v1
+        id: release
+        with:
+          prepare: node scripts/bump_version.mjs ${nextRelease.version}
+          commit-assets: |
+            manifest.json
+            popup/popup.html
+
+  announce:
+    needs: release
+    if: needs.release.outputs.tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: open20-rpg/open20-release/discord-announce@v1
+        with:
+          tag: ${{ needs.release.outputs.tag }}
+          title: Nivel21
+          download: https://open20.app/nivel21
+          status: "⏳ En camino a las tiendas: Chrome y Firefox suman su ✅ cuando la publican, lo que puede tardar unos días. Mientras tanto se puede instalar a mano desde la release."
+          bot-token: ${{ secrets.DISCORD_BOT_TOKEN }}
+
+  build:
+    needs: [release, announce]
+    if: ${{ !cancelled() && (needs.release.outputs.tag != '' || inputs.release_tag != '') }}
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || needs.release.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,26 +99,21 @@ jobs:
           name: n21ext-zip
           path: n21ext.zip
 
-  attach-zip-to-release:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Download zip artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: n21ext-zip
-          path: .
-
       - name: Attach zip to GitHub release
         run: gh release upload "$RELEASE_TAG" n21ext.zip --repo "${{ github.repository }}" --clobber
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        shell: bash
+
+      - uses: open20-rpg/open20-release/discord-react@v1
+        with:
+          tag: ${{ env.RELEASE_TAG }}
+          emoji: github_ready
+          bot-token: ${{ secrets.DISCORD_BOT_TOKEN }}
 
   release-chrome-extension:
     runs-on: ubuntu-latest
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
 
     steps:
       - name: Download zip artifact
@@ -74,7 +133,10 @@ jobs:
 
   release-firefox-addon:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [release, build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || needs.release.outputs.tag }}
 
     steps:
       - name: Download zip artifact
@@ -94,51 +156,15 @@ jobs:
           compatibility-android-min: "120.0"
           release-note: "Release ${{ env.RELEASE_TAG }}"
 
-  notify-discord:
+  # Waits for the stores even if an upload failed: re-running this workflow
+  # by hand uploads again, and the store check picks it up.
+  store-status:
     runs-on: ubuntu-latest
-    needs:
-      - attach-zip-to-release
-      - release-chrome-extension
-      - release-firefox-addon
-
+    needs: [release, release-chrome-extension, release-firefox-addon]
+    if: ${{ !cancelled() && (needs.release.outputs.tag != '' || inputs.release_tag != '') }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.RELEASE_TAG }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Load release description
-        run: |
-          {
-            echo "RELEASE_DESCRIPTION<<EOF"
-            gh release view "$RELEASE_TAG" --json body --jq '.body'
-            echo "EOF"
-          } >> "$GITHUB_ENV"
+      - name: Start the store checks
+        run: gh workflow run store-status.yml --repo "${{ github.repository }}" -f tag="$RELEASE_TAG"
         env:
           GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Notify Discord release
-        run: node ./scripts/notify_discord_release.mjs "$RELEASE_TAG" "${RELEASE_DESCRIPTION:-Sin descripción}"
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-
-      # Lets store-status.yml react to this message once each store publishes.
-      - name: Attach Discord message to release
-        if: always() && hashFiles('discord-message.json') != ''
-        run: gh release upload "$RELEASE_TAG" discord-message.json --repo "${{ github.repository }}" --clobber
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      # Start polling the stores until both publish this version.
-      - name: Enable store status checks
-        if: always() && hashFiles('discord-message.json') != ''
-        run: |
-          gh workflow enable store-status-firefox.yml --repo "${{ github.repository }}"
-          gh workflow enable store-status-chrome.yml --repo "${{ github.repository }}"
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || needs.release.outputs.tag }}
