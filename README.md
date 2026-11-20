@@ -4,7 +4,7 @@
 
 **Más herramientas para tus partidas en Nivel20**, para el DM y para los jugadores.
 
-<a href="https://chromewebstore.google.com/detail/jadlpdmjlfghndcehdhjhgndfmigbdoe"><img src="https://img.shields.io/badge/Chrome-Instalar-A70909?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=1b1b1d" alt="Instalar en Chrome" /></a> <a href="https://addons.mozilla.org/firefox/addon/nivel21/"><img src="https://img.shields.io/badge/Firefox-Instalar-A70909?style=for-the-badge&logo=firefoxbrowser&logoColor=white&labelColor=1b1b1d" alt="Instalar en Firefox" /></a> <a href="https://discord.gg/KRHJm8x6rp"><img src="https://img.shields.io/badge/Discord-%C3%9Anete-34343c?style=for-the-badge&logo=discord&logoColor=white&labelColor=1b1b1d" alt="Únete al Discord" /></a> <a href="https://www.patreon.com/open20rpg"><img src="https://img.shields.io/badge/Patreon-Apoyar-34343c?style=for-the-badge&logo=patreon&logoColor=white&labelColor=1b1b1d" alt="Apoyar en Patreon" /></a>
+<a href="https://chromewebstore.google.com/detail/jadlpdmjlfghndcehdhjhgndfmigbdoe"><img src="https://img.shields.io/badge/Chrome-Instalar-A70909?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=1b1b1d" alt="Instalar en Chrome" /></a> <a href="https://addons.mozilla.org/firefox/addon/nivel21/"><img src="https://img.shields.io/badge/Firefox-Instalar-A70909?style=for-the-badge&logo=firefoxbrowser&logoColor=white&labelColor=1b1b1d" alt="Instalar en Firefox" /></a> <a href="https://open20.app/dc"><img src="https://img.shields.io/badge/Discord-%C3%9Anete-34343c?style=for-the-badge&logo=discord&logoColor=white&labelColor=1b1b1d" alt="Únete al Discord" /></a> <a href="https://www.patreon.com/open20rpg"><img src="https://img.shields.io/badge/Patreon-Apoyar-34343c?style=for-the-badge&logo=patreon&logoColor=white&labelColor=1b1b1d" alt="Apoyar en Patreon" /></a>
 
 </div>
 
@@ -25,7 +25,7 @@ Después eliges qué funciones usar desde **Nivel21 › Configuración**.
 
 ## Comunidad
 
-Novedades, ideas y reportes de errores en [Discord](https://discord.gg/KRHJm8x6rp).
+Novedades, ideas y reportes de errores en [Discord](https://open20.app/dc).
 Si Nivel21 te sirve, puedes apoyar el proyecto en [Patreon](https://www.patreon.com/open20rpg).
 
 Nivel21 es parte de [Open20](https://open20.app), una suite de herramientas para
