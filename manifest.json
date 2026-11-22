@@ -73,6 +73,7 @@
         "src/core/main-menu-ui-manager.js",
         "src/core/quick-menu-ui-manager.js",
         "src/core/markdown-editor-manager.js",
+        "src/core/battle-maps-format.js",
         "src/features/advantage-disadvantage.js",
         "src/features/send-to-chat.js",
         "src/features/parse-chat-links.js",
@@ -117,6 +118,7 @@
         "src/features/token-health-bar.js",
         "src/features/token-conditions.js",
         "src/features/invisible-condition.js",
+        "src/features/battle-maps-import.js",
         "src/features/error-report.js"
       ],
       "matches": ["https://nivel20.com/*"]

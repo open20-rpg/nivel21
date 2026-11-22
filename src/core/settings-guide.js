@@ -339,6 +339,12 @@
       image: IMG("dm-screen.png"),
       description: "Pantalla con tarjetas de referencia rápida: CDs, cobertura, daño y más.",
     },
+    "battle-maps-import": {
+      group: "dm",
+      gmOnly: true,
+      description:
+        "Carga un mapa de Open20 Battle Maps con su fondo, tokens bloqueados y muros de niebla, y lo guarda como escena.",
+    },
     "ambient-fx": {
       group: "dm",
       gmOnly: true,
@@ -456,6 +462,12 @@
       "Abre «Pantalla de DM» desde Nivel 21, en el menú de la izquierda.",
       "Consulta las tarjetas: CDs, cobertura, severidad del daño, objetos y más.",
       "Crea tus propias tarjetas y reordénalas arrastrándolas.",
+    ],
+    "battle-maps-import": [
+      "En Open20 Battle Maps, exporta el mapa con Extensiones › «Exportar como Nivel20 (con Nivel21)».",
+      "DM: abre «Importar mapa de Battle Maps» desde Nivel 21, en el menú de la izquierda, y elige el archivo .n21map.",
+      "Confirma: se vacía la escena, se carga el mapa con sus tokens y muros, y se guarda como escena.",
+      "Para abrir una puerta o ventana, borra solo su muro en la niebla de guerra.",
     ],
     "ambient-fx": [
       "DM: abre «Efectos ambientales» desde Nivel 21, en el menú de la izquierda.",

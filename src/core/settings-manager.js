@@ -310,6 +310,14 @@
       });
 
       this.registerSetting({
+        name: "feature.battle-maps-import.enabled",
+        label: "Importar mapas de Battle Maps",
+        type: "boolean",
+        defaultValue: true,
+        category: "features",
+      });
+
+      this.registerSetting({
         name: "feature.token-drag-measurement.enabled",
         label: "Medición de distancias al arrastrar",
         type: "boolean",
