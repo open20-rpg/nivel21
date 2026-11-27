@@ -1,5 +1,67 @@
 // Content script loader - injects scripts into page context
 (function () {
+  // Nivel20 launched a brand-new tabletop and the extension isn't compatible
+  // with it yet. While this is true nothing is injected into the page: we only
+  // show a notice on the tabletop. Set it back to false (and restore the CSS
+  // in manifest.json's content_scripts) once the extension is adapted.
+  const EXTENSION_PAUSED = true;
+
+  if (EXTENSION_PAUSED) {
+    showPausedNotice();
+    return;
+  }
+
+  function showPausedNotice() {
+    if (!/^\/tabletop(?:\/|$)/.test(window.location.pathname)) return;
+
+    const DISMISS_KEY = "_n21_paused-notice-dismissed";
+    const version = chrome.runtime.getManifest().version;
+    try {
+      if (sessionStorage.getItem(DISMISS_KEY) === version) return;
+    } catch (_error) {}
+
+    const render = () => {
+      const host = document.createElement("div");
+      host.id = "n21-paused-notice";
+      // Shadow DOM so neither the page's styles nor ours leak across.
+      const root = host.attachShadow({ mode: "closed" });
+      root.innerHTML = `
+        <style>
+          .box { position: fixed; right: 16px; bottom: 16px; z-index: 2147483000;
+            width: min(360px, calc(100vw - 32px)); padding: 14px 16px; box-sizing: border-box;
+            border: 1px solid #3a3d42; border-radius: 10px; background: #1d1e21; color: #ecebe8;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); font: 14px/1.45 system-ui, sans-serif; }
+          h5 { margin: 0 0 6px; padding-right: 24px; font-size: 15px; font-weight: 700; }
+          p { margin: 0 0 8px; }
+          p:last-child { margin-bottom: 0; }
+          a { color: #8ea1ff; }
+          button { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
+            border: 0; border-radius: 6px; background: transparent; color: inherit;
+            font-size: 18px; line-height: 1; cursor: pointer; }
+          button:hover { background: rgba(255, 255, 255, 0.08); }
+        </style>
+        <div class="box" role="status">
+          <button type="button" aria-label="Cerrar">×</button>
+          <h5>Nivel21 está en pausa</h5>
+          <p>Nivel20 lanzó su nuevo tablero y la extensión todavía no es compatible,
+            así que no se cargó para no causar errores.</p>
+          <p>Estamos trabajando para adaptarla a la nueva versión del tablero.
+            Novedades en <a href="https://open20.app/dc" target="_blank"
+            rel="noopener">nuestro Discord</a>.</p>
+        </div>`;
+      root.querySelector("button").addEventListener("click", () => {
+        try {
+          sessionStorage.setItem(DISMISS_KEY, version);
+        } catch (_error) {}
+        host.remove();
+      });
+      document.body.appendChild(host);
+    };
+
+    if (document.body) render();
+    else document.addEventListener("DOMContentLoaded", render, { once: true });
+  }
+
   // Expose the extension's base URL (chrome-extension://<id>/ or
   // moz-extension://<uuid>/) to the page context via a shared-DOM data
   // attribute, so injected scripts can build URLs to web-accessible assets.

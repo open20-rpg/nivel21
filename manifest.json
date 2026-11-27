@@ -18,8 +18,7 @@
   "content_scripts": [
     {
       "matches": ["https://nivel20.com/*"],
-      "js": ["src/content/content.js"],
-      "css": ["src/styles/style.css"]
+      "js": ["src/content/content.js"]
     }
   ],
   "web_accessible_resources": [
